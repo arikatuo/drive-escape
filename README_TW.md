@@ -4,6 +4,8 @@
 
 **線上體驗** → [drive-escape.pomodiary.com](https://drive-escape.pomodiary.com)
 
+**作者** → [@benshandebiao](https://x.com/benshandebiao)
+
 🌐 [简体中文](./README.md) | [English](./README_EN.md) | [日本語](./README_JA.md)
 
 ## 功能

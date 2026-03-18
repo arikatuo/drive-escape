@@ -4,6 +4,8 @@
 
 **デモ** → [drive-escape.pomodiary.com](https://drive-escape.pomodiary.com)
 
+**Author** → [@benshandebiao](https://x.com/benshandebiao)
+
 🌐 [简体中文](./README.md) | [English](./README_EN.md) | [繁體中文](./README_TW.md)
 
 ## 機能
