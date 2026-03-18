@@ -1392,7 +1392,13 @@ switchCity = async function(name, lng, lat, cc) {
   const urlCity = new URLSearchParams(window.location.search).get('city');
 
   if (urlCity) {
-    // URL 指定了城市，通过 Nominatim 搜索
+    // 先用 URL 参数名称显示，等 Nominatim 返回后再更新
+    document.getElementById("title-sub").textContent = t('subtitle', { city: urlCity });
+    document.getElementById("legend-origin").textContent = t('originCity', { city: urlCity });
+    document.title = t('pageTitle', { city: urlCity });
+    searchInput.value = urlCity;
+
+    // 通过 Nominatim 搜索真实坐标
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(urlCity)}&format=json&addressdetails=1&limit=1&accept-language=zh`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
       const data = await res.json();
