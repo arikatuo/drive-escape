@@ -1373,9 +1373,10 @@ async function switchCity(name, lng, lat, countryCode) {
     const isEurope = EUROPE_CODES.has(countryCode);
 
     const queries = isJapan ? [
-      // 日本：level 4 = 都道府県, level 7 = 市区町村
+      // 日本：level 4 = 都道府県, level 7 = 市区町村, level 8 = 区/町（より詳細）
       { radius: 400000, levels: "4", labelKey: "loadingAdmin" },
-      { radius: 400000, levels: "7", labelKey: "loadingDetail" }
+      { radius: 400000, levels: "7", labelKey: "loadingDetail" },
+      { radius: 200000, levels: "8", labelKey: "loadingDetail" }
     ] : isEurope ? [
       // 欧洲：level 4 补充城市州(柏林/汉堡等), level 6 = 省/郡, level 8 = 市镇/Borough
       { radius: 100000, levels: "4|5", labelKey: "loadingAdmin" },
