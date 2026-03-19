@@ -281,7 +281,7 @@
         top: 68px;
         left: 50%;
         transform: translateX(-50%);
-        width: calc(100vw - 140px);
+        width: 180px;
         z-index: 1001;
       }
       .top-controls input[type="text"] {
@@ -536,16 +536,6 @@ function t(key, vars) {
   return s;
 }
 
-function syncSearchWidth() {
-  if (window.innerWidth > 640) return; // 仅手机端
-  const titleEl = document.querySelector('.title-overlay');
-  const searchBox = document.querySelector('.top-controls .search-box');
-  if (!titleEl || !searchBox) return;
-  const w = titleEl.getBoundingClientRect().width;
-  if (w > 0) searchBox.style.width = w + 'px';
-}
-window.addEventListener('resize', syncSearchWidth);
-
 function applyLang() {
   document.documentElement.lang = window.LANG?.code || 'zh-CN';
   document.querySelector('.title-overlay .en').textContent = t('titleEn');
@@ -564,9 +554,6 @@ function applyLang() {
     document.title = t('pageTitle', { city: currentCityName });
     document.getElementById('legend-origin').textContent = t('originCity', { city: currentCityName });
   }
-  // 同步搜索框宽度（手机端）
-  requestAnimationFrame(syncSearchWidth);
-
   // 更新欢迎屏文案
   const wh = document.getElementById('welcome-headline');
   const ws = document.getElementById('welcome-sub');
@@ -958,10 +945,6 @@ async function searchCity(query) {
         const cc = el.dataset.cc;
         searchInput.value = name;
         searchResults.style.display = "none";
-        // 立即同步更新标题和图例，不等 switchCity 内部流程
-        document.getElementById("title-sub").textContent = t('subtitle', { city: name });
-        document.getElementById("legend-origin").textContent = t('originCity', { city: name });
-        document.title = t('pageTitle', { city: name });
         showLoading(t('loading'));
         switchCity(name, lng, lat, cc);
       });
@@ -1558,13 +1541,11 @@ async function switchCity(name, lng, lat, countryCode) {
     renderMap();
     hideLoading();
     updateURL(name);
-    requestAnimationFrame(syncSearchWidth);
   } else {
     // 无缓存：先用估算数据渲染，再 OSRM 精确化
     renderMap();
     hideLoading();
     updateURL(name);
-    requestAnimationFrame(syncSearchWidth);
 
     // 9. OSRM 批量计算真实驾车时间（逐批更新渲染）
     const destinations = [];
