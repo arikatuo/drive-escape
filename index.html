@@ -552,8 +552,9 @@ function applyLang() {
   if (legendItems[1]) legendItems[1].querySelector('span:last-child').textContent = t('originCity', { city: typeof currentCityName !== 'undefined' ? currentCityName : '' });
   if (legendItems[2]) legendItems[2].querySelector('span:last-child').textContent = t('provinceBorder');
   if (legendItems[3]) legendItems[3].querySelector('span:last-child').textContent = t('cityBorder');
-  // subtitle and page title
-  if (typeof currentCityName !== 'undefined') {
+  // subtitle and page title — 只在有城市数据时更新，且不覆盖 URL 指定的城市
+  const _urlCity = new URLSearchParams(window.location.search).get('city');
+  if (typeof currentCityName !== 'undefined' && !_urlCity) {
     document.getElementById('title-sub').textContent = t('subtitle', { city: currentCityName });
     document.title = t('pageTitle', { city: currentCityName });
     document.getElementById('legend-origin').textContent = t('originCity', { city: currentCityName });
@@ -1719,11 +1720,12 @@ async function welcomeSelectCity(name) {
   if (urlCity) {
     // 有 URL 参数：跳过欢迎屏，直接加载
     dismissWelcome();
-    showLoading(t('loading'));
-    document.getElementById("title-sub").textContent = t('subtitle', { city: urlCity });
-    document.getElementById("legend-origin").textContent = t('originCity', { city: urlCity });
-    document.title = t('pageTitle', { city: urlCity });
+    // 立即用 urlCity 更新标题/图例/搜索框，不等语言文件加载
+    document.getElementById("title-sub").textContent = urlCity;
+    document.getElementById("legend-origin").textContent = urlCity;
+    document.title = urlCity;
     searchInput.value = urlCity;
+    showLoading(t('loading') || '...');
 
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(urlCity)}&format=json&addressdetails=1&limit=1&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
