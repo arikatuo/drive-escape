@@ -41,13 +41,15 @@ wrangler kv:namespace create "DRIVE_CACHE"
 wrangler kv:namespace create "DRIVE_CACHE" --preview
 ```
 
-2. Update [wrangler.toml](/F:/driveescape/repo/wrangler.toml) with the returned IDs.
+2. Add a KV binding in your Cloudflare Pages project:
 
-3. Set the AMap key.
+- Binding name: `DRIVE_CACHE`
+- Bind to your KV namespace
 
-```bash
-wrangler secret put AMAP_KEY
-```
+3. Add a runtime variable in your Cloudflare Pages project:
+
+- Name: `AMAP_KEY`
+- Value: your AMap key
 
 4. Fill the placeholder data files:
 

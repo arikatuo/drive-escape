@@ -42,8 +42,8 @@
 
 当前仍需你补充：
 
-- [wrangler.toml](/F:/driveescape/repo/wrangler.toml) 里的 KV namespace ID
-- Cloudflare Secret `AMAP_KEY`
+- Cloudflare Pages 项目里的 `AMAP_KEY` 运行时变量
+- Cloudflare Pages 项目里的 `DRIVE_CACHE` KV 绑定（可选但推荐）
 - [hsr_stations.json](/F:/driveescape/repo/data/hsr_stations.json)
 - [hsr_matrix.json](/F:/driveescape/repo/data/hsr_matrix.json)
 
@@ -51,20 +51,22 @@
 
 ## 配置说明
 
-1. 创建 Cloudflare KV。
+1. 创建 Cloudflare KV（可选但推荐，开启后可减少 API 调用）。
 
 ```bash
 wrangler kv:namespace create "DRIVE_CACHE"
 wrangler kv:namespace create "DRIVE_CACHE" --preview
 ```
 
-2. 把返回的 `id` 和 `preview_id` 写入 [wrangler.toml](/F:/driveescape/repo/wrangler.toml)。
+2. 在 Cloudflare Pages 项目中添加 KV 绑定：
 
-3. 配置高德 Key。
+- Binding 名称：`DRIVE_CACHE`
+- 绑定到你创建的 namespace
 
-```bash
-wrangler secret put AMAP_KEY
-```
+3. 在 Cloudflare Pages 项目中添加运行时变量：
+
+- 变量名：`AMAP_KEY`
+- 变量值：你的高德 Key
 
 4. 准备高铁静态数据。
 
@@ -95,8 +97,8 @@ wrangler pages deploy . --project-name drive-escape
 
 部署前请确认：
 
-- `wrangler.toml` 已填好 KV ID
-- `AMAP_KEY` 已写入 secret
+- Pages 已配置 `AMAP_KEY`
+- Pages（可选）已绑定 `DRIVE_CACHE`
 - `data/hsr_stations.json` 与 `data/hsr_matrix.json` 已准备完毕
 
 ## 开源协议
