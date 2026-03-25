@@ -1,28 +1,47 @@
+function jsonResp(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*"
+    }
+  });
+}
+
 export async function onRequest(context) {
-  const url = new URL(context.request.url);
-  const code = url.searchParams.get('code');
-  
-  if (!code || !/^\d+$/.test(code)) {
-    return new Response(JSON.stringify({ error: 'invalid code' }), { status: 400 });
-  }
-  
-  const target = `https://geo.datav.aliyun.com/areas_v3/bound/${code}_full.json`;
-  
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const keywords = (url.searchParams.get("keywords") || "").trim();
+  const level = url.searchParams.get("level") || "district";
+
+  if (!keywords) return jsonResp({ error: "invalid keywords" }, 400);
+  if (!env.AMAP_KEY) return jsonResp({ error: "AMAP_KEY is not configured" }, 500);
+
+  const cacheKey = `geo:${keywords}:${level}`;
+  const cached = await env.DRIVE_CACHE?.get(cacheKey);
+  if (cached) return jsonResp(JSON.parse(cached));
+
   try {
-    const r = await fetch(target, {
-      headers: { 'Referer': 'https://datav.aliyun.com/', 'User-Agent': 'Mozilla/5.0' }
-    });
-    if (!r.ok) throw new Error(`${r.status}`);
-    const data = await r.text();
-    
-    return new Response(data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=86400',
-        'Access-Control-Allow-Origin': '*'
-      }
-    });
-  } catch(e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 502 });
+    const target = `https://restapi.amap.com/v3/config/district?keywords=${encodeURIComponent(keywords)}&subdistrict=2&extensions=all&key=${env.AMAP_KEY}`;
+    const res = await fetch(target);
+    const data = await res.json();
+    if (data.status !== "1" || !data.districts?.length) {
+      return jsonResp({ error: "AMap district query failed" }, 502);
+    }
+
+    const city = data.districts[0];
+    const result = {
+      city,
+      districts: city.districts || []
+    };
+
+    if (env.DRIVE_CACHE) {
+      await env.DRIVE_CACHE.put(cacheKey, JSON.stringify(result), {
+        expirationTtl: 60 * 60 * 24 * 30
+      });
+    }
+    return jsonResp(result);
+  } catch (e) {
+    return jsonResp({ error: e.message }, 502);
   }
 }

@@ -214,6 +214,66 @@
       background: repeating-linear-gradient(45deg, #aa2211, #aa2211 3px, #fff 3px, #fff 6px);
     }
 
+    .control-card {
+      position: fixed;
+      top: 12px;
+      left: 16px;
+      z-index: 1001;
+      width: 216px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.93);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    .ctrl-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+      letter-spacing: .04em;
+    }
+    .transport-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .t-btn {
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.6);
+      color: #555;
+      transition: all .15s;
+    }
+    .t-btn.active {
+      background: #1a6e5c;
+      color: #fff;
+      border-color: #1a6e5c;
+    }
+    .time-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .time-row input[type=range] {
+      flex: 1;
+      accent-color: #1a6e5c;
+    }
+    #time-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1a6e5c;
+      min-width: 20px;
+    }
+    .time-unit {
+      font-size: 11px;
+      color: #888;
+    }
+
     /* 县区标签 */
     .county-label {
       font-weight: 600;
@@ -302,6 +362,20 @@
       .lang-switcher select {
         padding: 6px 24px 6px 8px;
         font-size: 11px;
+      }
+      .control-card {
+        top: auto;
+        left: 10px;
+        right: 120px;
+        bottom: 76px;
+        width: auto;
+      }
+      .transport-row {
+        gap: 5px;
+      }
+      .t-btn {
+        font-size: 11px;
+        padding: 5px 8px;
       }
       #search-results { max-height: 200px; }
 
@@ -514,6 +588,22 @@
   </div>
 </div>
 
+<div class="control-card" id="control-card">
+  <div class="ctrl-label">交通方式</div>
+  <div class="transport-row" id="transport-row">
+    <button class="t-btn active" data-type="car" onclick="selectTransport('car')">汽车</button>
+    <button class="t-btn" data-type="hsr" onclick="selectTransport('hsr')">高铁</button>
+    <button class="t-btn" data-type="moto" onclick="selectTransport('moto')">摩托</button>
+    <button class="t-btn" data-type="bike" onclick="selectTransport('bike')">自行车</button>
+  </div>
+  <div class="ctrl-label" style="margin-top:10px">最长时间</div>
+  <div class="time-row">
+    <input type="range" id="time-slider" min="1" max="12" value="5" oninput="updateTimeLimit(this.value)" />
+    <span id="time-val">5</span>
+    <span class="time-unit">小时</span>
+  </div>
+</div>
+
 <div class="top-controls">
   <div class="search-box">
     <input type="text" id="city-search" placeholder="搜索出发城市..." />
@@ -576,7 +666,7 @@ function applyLang() {
   // subtitle and page title — 只在有城市数据时更新，且不覆盖 URL 指定的城市
   const _urlCity = new URLSearchParams(window.location.search).get('city');
   if (typeof currentCityName !== 'undefined' && !_urlCity) {
-    document.getElementById('title-sub').textContent = t('subtitle', { city: currentCityName });
+    updateTitleSub();
     document.title = t('pageTitle', { city: currentCityName });
     document.getElementById('legend-origin').textContent = t('originCity', { city: currentCityName });
   }
@@ -674,7 +764,6 @@ const colorBands = [
   { min: 4.5, max: 5.0, color: "#aa2211", label: "4.5–5h" }
 ];
 
-const MAX_DRIVE_HOURS = 5.0; // 超过此时间的区县不显示
 const MAX_STRAIGHT_KM = 400; // 直线距离上限，防止飞地
 
 // ── 34 个省级行政区 ──
@@ -764,6 +853,9 @@ let allGrayFeatures = [];
 let allCityOutlines = [];
 let allGrayCityOutlines = [];
 let labelLayer = L.layerGroup().addTo(map);
+let currentTransport = "car";
+let maxHours = 5;
+let currentCountryCode = "cn";
 
 // 需要在 switchCity 中清除的图层
 let activeLayers = [];
@@ -839,6 +931,12 @@ function showInfo(dd) {
   infoDetail.innerHTML = isOrigin
     ? `<span class="time">${t('originLabel')}</span>`
     : `<span class="time">🕐 ${fmtTime(dd.time)} ${t('timeUnit')}</span> · ${dd.dist} km${dd.estimated ? ' ' + t('estimated') : ''}`;
+  if (currentTransport === "moto" && !isOrigin) {
+    infoDetail.innerHTML += ` <span style="font-size:11px;color:#888">（参考汽车路况，近似值）</span>`;
+  }
+  if (currentTransport === "hsr" && dd.breakdown) {
+    infoDetail.innerHTML += `<br><span style="font-size:11px;color:#666">接驳 ${dd.breakdown.toStation}m + 高铁 ${dd.breakdown.trainTime}m + 接驳 ${dd.breakdown.fromStation}m</span>`;
+  }
   infoPanel.style.display = "block";
 }
 
@@ -850,7 +948,7 @@ function updateLabels() {
   const placed = [];
 
   const allFeatures = [
-    ...allCountyFeatures.filter(f => { const d = getDriveData(f); if(!d) return false; if(String(f?.properties?.adcode)===originAdcode) return true; if(d.time>MAX_DRIVE_HOURS) return false; const c=f?.properties?.centroid||f?.properties?.center; if(c){const sd=haversine(currentOrigin[0],currentOrigin[1],c[0],c[1]); if(sd>MAX_STRAIGHT_KM) return false;} return true; }).map(f => ({ f, core: true })),
+    ...allCountyFeatures.filter(f => { const d = getDriveData(f); if(!d) return false; if(String(f?.properties?.adcode)===originAdcode) return true; if(d.time>maxHours) return false; const c=f?.properties?.centroid||f?.properties?.center; if(c){const sd=haversine(currentOrigin[0],currentOrigin[1],c[0],c[1]); if(sd>MAX_STRAIGHT_KM) return false;} return true; }).map(f => ({ f, core: true })),
     ...allGrayFeatures.map(f => ({ f, core: false }))
   ];
 
@@ -928,9 +1026,7 @@ searchInput.addEventListener("input", () => {
 
 async function searchCity(query) {
   try {
-    const lang = window.LANG?.code || 'zh-CN';
-    const acceptLang = lang === 'en' ? 'en' : lang === 'ja' ? 'ja' : 'zh';
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8&accept-language=${acceptLang}`;
+    const url = `/api/search?keywords=${encodeURIComponent(query)}`;
     const res = await fetch(url);
     const data = await res.json();
     if (!data.length) {
@@ -940,8 +1036,8 @@ async function searchCity(query) {
     }
     searchResults.innerHTML = data.map((item, i) => {
       const name = item.display_name.split(",")[0];
-      const sub = item.display_name.split(",").slice(1, 3).join(", ");
-      const cc = item.address?.country_code || '';
+      const sub = item.address || '';
+      const cc = item.country_code || 'cn';
       return `<div class="result-item" data-idx="${i}" data-lng="${item.lon}" data-lat="${item.lat}" data-name="${name}" data-cc="${cc}">
         <div>${name}</div>
         <div class="result-sub">${sub}</div>
@@ -971,13 +1067,116 @@ document.addEventListener("click", e => {
   if (!e.target.closest(".search-box")) searchResults.style.display = "none";
 });
 
-// ── 数据加载 ──
-// DataV 代理：线上走 /api/geo 代理（避免 CORS/403），本地直连
-function geoURL(code) {
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    return `https://geo.datav.aliyun.com/areas_v3/bound/${code}_full.json`;
+function updateTitleSub() {
+  if (!currentCityName) return;
+  const transportNames = { car: "汽车", moto: "摩托", bike: "自行车", hsr: "高铁" };
+  document.getElementById("title-sub").textContent = `${currentCityName} · ${transportNames[currentTransport]} · ${maxHours}小时圈`;
+}
+
+function selectTransport(type) {
+  currentTransport = type;
+  document.querySelectorAll(".t-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.type === type);
+  });
+  updateTitleSub();
+  if (currentCityName) {
+    showLoading(t("loading"));
+    switchCity(currentCityName, currentOrigin[0], currentOrigin[1], currentCountryCode, true);
   }
-  return `/api/geo?code=${code}`;
+}
+
+function updateTimeLimit(val) {
+  maxHours = parseFloat(val);
+  document.getElementById("time-val").textContent = val;
+  updateTitleSub();
+  if (allCountyFeatures.length > 0) renderMap(true);
+}
+
+function amapPolylineToGeoJSON(districts) {
+  return districts
+    .filter(d => d.polyline)
+    .map(d => {
+      const rings = d.polyline
+        .split("|")
+        .map(ring => ring.split(";").map(pt => pt.split(",").map(Number)).filter(pt => pt.length === 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1])))
+        .filter(ring => ring.length >= 3)
+        .map(ring => {
+          const first = ring[0];
+          const last = ring[ring.length - 1];
+          if (first[0] !== last[0] || first[1] !== last[1]) ring.push([...first]);
+          return ring;
+        });
+      if (!rings.length) return null;
+      const centroid = d.center ? d.center.split(",").map(Number) : d.centroid ? d.centroid.split(",").map(Number) : null;
+      return {
+        type: "Feature",
+        properties: {
+          adcode: d.adcode,
+          name: d.name,
+          centroid,
+          center: centroid
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: rings
+        }
+      };
+    })
+    .filter(Boolean);
+}
+
+async function fetchTransportTimes(origin, districts) {
+  const dests = districts
+    .map(d => d?.properties?.centroid || d?.properties?.center)
+    .filter(c => c && c.length === 2)
+    .map(c => `${c[0]},${c[1]}`);
+
+  if (!dests.length) return {};
+
+  if (currentTransport === "car" || currentTransport === "moto") {
+    const res = await fetch("/api/drive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin: `${origin[0]},${origin[1]}`,
+        destinations: dests,
+        cityAdcode: originAdcode || ""
+      })
+    });
+    return res.json();
+  }
+
+  if (currentTransport === "bike") {
+    const res = await fetch("/api/bike", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin: `${origin[0]},${origin[1]}`,
+        destinations: dests
+      })
+    });
+    return res.json();
+  }
+
+  const res = await fetch("/api/transit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      originLng: origin[0],
+      originLat: origin[1],
+      originCity: currentCityName,
+      districts: districts.map(d => {
+        const c = d?.properties?.centroid || d?.properties?.center;
+        return { adcode: d?.properties?.adcode, lng: c?.[0], lat: c?.[1], name: d?.properties?.name || "" };
+      }).filter(d => Number.isFinite(d.lng) && Number.isFinite(d.lat))
+    })
+  });
+  return res.json();
+}
+
+// 兼容旧的海外/历史数据加载逻辑
+function geoURL(code) {
+  return `https://geo.datav.aliyun.com/areas_v3/bound/${code}_full.json`;
 }
 
 async function fetchJSON(url, timeoutMs = 8000) {
@@ -1167,7 +1366,7 @@ function renderMap(skipFitBounds = false) {
     const d = getDriveData(f);
     if (!d) return false;
     if (String(f?.properties?.adcode) === originAdcode) return true;
-    if (d.time > MAX_DRIVE_HOURS) return false;
+    if (d.time > maxHours) return false;
     // 直线距离检查：防止远处孤立区县通过高速连通导致飞地
     const center = f?.properties?.centroid || f?.properties?.center;
     if (center) {
@@ -1340,11 +1539,12 @@ async function switchCity(name, lng, lat, countryCode) {
   // 2. 更新 origin
   currentOrigin = [lng, lat];
   currentCityName = name;
+  currentCountryCode = countryCode || "cn";
 
   // 3. 更新标题 + URL（四处同步）
-  document.getElementById("title-sub").textContent = t('subtitle', { city: name });
   document.getElementById("legend-origin").textContent = t('originCity', { city: name });
   document.title = t('pageTitle', { city: name });
+  updateTitleSub();
   updateURL(name);
 
   // 4. loading
@@ -1361,42 +1561,55 @@ async function switchCity(name, lng, lat, countryCode) {
   const provinceOutlines = [];
 
   if (isChina) {
-    // 中国：用 DataV API
-    const nearProvinces = [];
-    for (const prov of PROVINCES) {
-      if (prov.code >= 710000) continue;
-      const dist = haversine(lng, lat, prov.center[0], prov.center[1]);
-      if (dist < 800) nearProvinces.push(prov); // 800km 确保覆盖大省边缘区县
+    const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(name)}`, { signal });
+    const geoData = await geoRes.json();
+    allCountyFeatures = amapPolylineToGeoJSON(geoData.districts || []);
+
+    for (const feature of allCountyFeatures) {
+      const code = String(feature?.properties?.adcode || "");
+      const cname = feature?.properties?.name || "";
+      const center = feature?.properties?.centroid || feature?.properties?.center;
+      if (!center) continue;
+      const est = estimateDriveTime(center[0], center[1]);
+      driveDataMap[code] = { name: cname, time: est.time, dist: est.dist, estimated: true };
     }
 
-    const nearData = await parallelLimit(nearProvinces.map(p => () => loadProvinceCounties(p.code)), 3);
+    renderMap();
+    hideLoading();
 
-    for (const prov of nearData) {
-      if (prov.provOutline) provinceOutlines.push(prov.provOutline);
-      for (const city of prov.cityResults) {
-        allCityOutlines.push(city.outline);
-        for (const county of city.counties) {
-          allCountyFeatures.push(county);
-          const code = String(county?.properties?.adcode || "");
-          const cname = county?.properties?.name || "";
-          const center = county?.properties?.centroid || county?.properties?.center;
-          if (center) {
-            const est = estimateDriveTime(center[0], center[1]);
-            driveDataMap[code] = { name: cname, time: est.time, dist: est.dist, estimated: true };
-          }
+    const transportData = await fetchTransportTimes(currentOrigin, allCountyFeatures);
+    for (const feature of allCountyFeatures) {
+      const code = String(feature?.properties?.adcode || "");
+      const center = feature?.properties?.centroid || feature?.properties?.center;
+      if (!center) continue;
+      const centerKey = `${center[0]},${center[1]}`;
+
+      if (currentTransport === "hsr") {
+        const hsr = transportData[code];
+        if (hsr) {
+          driveDataMap[code] = {
+            ...driveDataMap[code],
+            time: hsr.time,
+            estimated: false,
+            breakdown: hsr.breakdown
+          };
         }
-        if (city.counties.length === 0 && city.outline) {
-          allCountyFeatures.push(city.outline);
-          const code = String(city.outline?.properties?.adcode || "");
-          const cname = city.outline?.properties?.name || "";
-          const center = city.outline?.properties?.centroid || city.outline?.properties?.center;
-          if (center) {
-            const est = estimateDriveTime(center[0], center[1]);
-            driveDataMap[code] = { name: cname, time: est.time, dist: est.dist, estimated: true };
-          }
+      } else {
+        const rt = transportData[centerKey];
+        if (rt) {
+          driveDataMap[code] = {
+            ...driveDataMap[code],
+            time: Math.round((rt.duration / 60) * 10) / 10,
+            dist: rt.distance,
+            estimated: false
+          };
         }
       }
     }
+
+    renderMap(true);
+    hideLoading();
+    return;
   } else {
     // 海外：用 Overpass API 获取行政边界
     showLoading(t('loadingOverseas'));
@@ -1679,12 +1892,12 @@ async function welcomeSelectCity(name) {
   document.getElementById('city-search').value = name;
   // 通过 Nominatim 搜索
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&addressdetails=1&limit=1&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
+    const res = await fetch(`/api/search?keywords=${encodeURIComponent(name)}`);
     const data = await res.json();
     if (data.length > 0) {
       const item = data[0];
       const resolved = item.display_name.split(",")[0];
-      const cc = item.address?.country_code || '';
+      const cc = item.country_code || 'cn';
       document.getElementById('city-search').value = resolved;
       await switchCity(resolved, parseFloat(item.lon), parseFloat(item.lat), cc);
       return;
@@ -1704,7 +1917,7 @@ async function welcomeSelectCity(name) {
     if (q.length < 2) { results.style.display = 'none'; return; }
     timer = setTimeout(async () => {
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
+        const r = await fetch(`/api/search?keywords=${encodeURIComponent(q)}`);
         const data = await r.json();
         results.innerHTML = '';
         if (!data.length) {
@@ -1718,7 +1931,7 @@ async function welcomeSelectCity(name) {
           el.onclick = async () => {
             results.style.display = 'none';
             const name = item.display_name.split(",")[0];
-            const cc = item.address?.country_code || '';
+            const cc = item.country_code || 'cn';
             input.value = name;
             dismissWelcome();
             showLoading(t('loading'));
@@ -1755,12 +1968,12 @@ async function welcomeSelectCity(name) {
     showLoading(t('loading') || '...');
 
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(urlCity)}&format=json&addressdetails=1&limit=1&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
+      const res = await fetch(`/api/search?keywords=${encodeURIComponent(urlCity)}`);
       const data = await res.json();
       if (data.length > 0) {
         const item = data[0];
         const name = item.display_name.split(",")[0];
-        const cc = item.address?.country_code || '';
+        const cc = item.country_code || 'cn';
         searchInput.value = name;
         await switchCity(name, parseFloat(item.lon), parseFloat(item.lat), cc);
         return;

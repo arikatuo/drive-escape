@@ -1,0 +1,7 @@
+name = "drive-escape"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "DRIVE_CACHE"
+id = "REPLACE_WITH_DRIVE_CACHE_ID"
+preview_id = "REPLACE_WITH_DRIVE_CACHE_PREVIEW_ID"
