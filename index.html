@@ -1069,8 +1069,14 @@ document.addEventListener("click", e => {
 
 function updateTitleSub() {
   if (!currentCityName) return;
-  const transportNames = { car: "汽车", moto: "摩托", bike: "自行车", hsr: "高铁" };
-  document.getElementById("title-sub").textContent = `${currentCityName} · ${transportNames[currentTransport]} · ${maxHours}小时圈`;
+  const lang = window.LANG?.code || "zh-CN";
+  const transportNames = lang === "en"
+    ? { car: "Car", moto: "Moto", bike: "Bike", hsr: "HSR" }
+    : lang === "ja"
+    ? { car: "自動車", moto: "バイク", bike: "自転車", hsr: "新幹線" }
+    : { car: "汽车", moto: "摩托", bike: "自行车", hsr: "高铁" };
+  const hourUnit = lang === "en" ? "h" : lang === "ja" ? "時間" : "小时";
+  document.getElementById("title-sub").textContent = `${currentCityName} · ${transportNames[currentTransport]} · ${maxHours}${hourUnit}圈`;
 }
 
 function selectTransport(type) {
@@ -1123,6 +1129,13 @@ function amapPolylineToGeoJSON(districts) {
       };
     })
     .filter(Boolean);
+}
+
+function buildGeoFeatureFromAmapDistrict(district, extraProps = {}) {
+  const [feature] = amapPolylineToGeoJSON(district ? [district] : []);
+  if (!feature) return null;
+  feature.properties = { ...feature.properties, ...extraProps };
+  return feature;
 }
 
 async function fetchTransportTimes(origin, districts) {
@@ -1565,6 +1578,18 @@ async function switchCity(name, lng, lat, countryCode) {
     const geoData = await geoRes.json();
     allCountyFeatures = amapPolylineToGeoJSON(geoData.districts || []);
 
+    const cityOutline = buildGeoFeatureFromAmapDistrict(geoData.city, {
+      name: geoData.city?.name || name,
+      adcode: geoData.city?.adcode || ""
+    });
+    if (cityOutline) allCityOutlines = [cityOutline];
+
+    const provinceOutline = buildGeoFeatureFromAmapDistrict(geoData.province, {
+      name: geoData.province?.name || "",
+      adcode: geoData.province?.adcode || ""
+    });
+    if (provinceOutline) provinceOutlines.push(provinceOutline);
+
     for (const feature of allCountyFeatures) {
       const code = String(feature?.properties?.adcode || "");
       const cname = feature?.properties?.name || "";
@@ -1577,6 +1602,13 @@ async function switchCity(name, lng, lat, countryCode) {
     renderMap();
     hideLoading();
 
+    showLoading(
+      currentTransport === "bike"
+        ? "正在计算骑行时间..."
+        : currentTransport === "hsr"
+        ? "正在计算高铁时间..."
+        : t('loadingDriveTime', { done: '0', total: '1' })
+    );
     const transportData = await fetchTransportTimes(currentOrigin, allCountyFeatures);
     for (const feature of allCountyFeatures) {
       const code = String(feature?.properties?.adcode || "");

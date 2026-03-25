@@ -25,6 +25,7 @@ async function parallelLimit(tasks, limit = 5) {
 
 export async function onRequest(context) {
   const { request, env } = context;
+  if (request.method === "OPTIONS") return jsonResp({});
   if (request.method !== "POST") return jsonResp({ error: "Method Not Allowed" }, 405);
   if (!env.AMAP_KEY) return jsonResp({ error: "AMAP_KEY is not configured" }, 500);
 

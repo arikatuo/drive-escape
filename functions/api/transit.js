@@ -6,7 +6,9 @@ function jsonResp(data, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*"
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
     }
   });
 }
@@ -52,6 +54,7 @@ async function getTransfer(env, from, to, cache) {
 
 export async function onRequest(context) {
   const { request, env } = context;
+  if (request.method === "OPTIONS") return jsonResp({});
   if (request.method !== "POST") return jsonResp({ error: "Method Not Allowed" }, 405);
   if (!env.AMAP_KEY) return jsonResp({ error: "AMAP_KEY is not configured" }, 500);
 
