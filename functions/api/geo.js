@@ -70,7 +70,7 @@ export async function onRequest(context) {
     const result = {
       city,
       districts: city.districts || [],
-      province: city.province || data.districts[0] || null
+      province: city.province || null
     };
 
     if (env.DRIVE_CACHE) {

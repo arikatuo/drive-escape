@@ -1576,7 +1576,15 @@ async function switchCity(name, lng, lat, countryCode) {
   if (isChina) {
     const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(name)}`, { signal });
     const geoData = await geoRes.json();
+    if (geoData?.error) {
+      hideLoading();
+      return;
+    }
     allCountyFeatures = amapPolylineToGeoJSON(geoData.districts || []);
+    if (!allCountyFeatures.length) {
+      hideLoading();
+      return;
+    }
 
     const cityOutline = buildGeoFeatureFromAmapDistrict(geoData.city, {
       name: geoData.city?.name || name,
