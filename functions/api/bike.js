@@ -42,6 +42,9 @@ export async function onRequest(context) {
     const res = await fetch(apiUrl);
     const data = await res.json();
     const path = data.data?.paths?.[0];
+    if (!path || parseInt(path.distance || "0", 10) <= 0) {
+      return [dest, null];
+    }
     const result = {
       duration: Math.round(parseInt(path?.duration || "0", 10) / 60),
       distance: Math.round(parseInt(path?.distance || "0", 10) / 1000)

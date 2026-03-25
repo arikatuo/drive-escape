@@ -18,12 +18,14 @@ export async function onRequest(context) {
   const { origin, destinations = [], cityAdcode = "" } = body || {};
   if (!origin || !Array.isArray(destinations) || destinations.length === 0) return jsonResp({});
 
-  const cacheKey = `drive:${origin}:${cityAdcode}:${destinations.join("|")}`;
+  // Keep the cache key short to stay within KV key length limits.
+  const cacheKey = `drive:${origin}:${cityAdcode}`;
   const cached = await env.DRIVE_CACHE?.get(cacheKey);
   if (cached) return jsonResp(JSON.parse(cached));
 
   const BATCH = 100;
   const results = {};
+  let hasApiError = false;
 
   for (let i = 0; i < destinations.length; i += BATCH) {
     const batch = destinations.slice(i, i + BATCH);
@@ -31,9 +33,16 @@ export async function onRequest(context) {
     const apiUrl = `https://restapi.amap.com/v3/distance?origins=${origin}&destinations=${destStr}&type=1&key=${env.AMAP_KEY}`;
     const res = await fetch(apiUrl);
     const data = await res.json();
-    if (data.status !== "1") continue;
+    if (data.status !== "1") {
+      hasApiError = true;
+      continue;
+    }
 
-    (data.results || []).forEach((r, idx) => {
+    (data.results || []).forEach((r, seq) => {
+      // AMap destination_id starts from 1.
+      const rawIdx = parseInt(r.destination_id || "0", 10) - 1;
+      const idx = Number.isFinite(rawIdx) && rawIdx >= 0 ? rawIdx : seq;
+      if (idx < 0 || idx >= batch.length) return;
       const duration = parseInt(r.duration || "0", 10);
       const distance = parseInt(r.distance || "0", 10);
       results[batch[idx]] = {
@@ -41,6 +50,10 @@ export async function onRequest(context) {
         distance: Math.round(distance / 1000)
       };
     });
+  }
+
+  if (hasApiError && Object.keys(results).length === 0) {
+    return jsonResp({ __meta: { fallback: true, error: "quota_or_api_error" } });
   }
 
   if (env.DRIVE_CACHE) {

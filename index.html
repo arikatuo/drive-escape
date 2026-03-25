@@ -1138,6 +1138,28 @@ function buildGeoFeatureFromAmapDistrict(district, extraProps = {}) {
   return feature;
 }
 
+const PRESET_CITIES = {
+  "北京": "beijing",
+  "上海": "shanghai",
+  "杭州": "hangzhou",
+  "成都": "chengdu",
+  "西安": "xian"
+};
+const MOTO_SPEED_FACTOR = 0.9;
+
+function applyMotoFactorToDriveData(driveData) {
+  const adjusted = {};
+  for (const [code, data] of Object.entries(driveData || {})) {
+    if (!data || typeof data !== "object") continue;
+    const t = Number(data.time);
+    adjusted[code] = {
+      ...data,
+      time: Number.isFinite(t) ? Math.round(t * MOTO_SPEED_FACTOR * 10) / 10 : data.time
+    };
+  }
+  return adjusted;
+}
+
 async function fetchTransportTimes(origin, districts) {
   const dests = districts
     .map(d => d?.properties?.centroid || d?.properties?.center)
@@ -1525,7 +1547,7 @@ async function getCityCenter(name, lng, lat) {
   return null; // fallback 用原坐标
 }
 
-async function switchCity(name, lng, lat, countryCode) {
+async function switchCity(name, lng, lat, countryCode, forceReload = false) {
   // 新的 AbortController，取消旧请求
   if (currentCityAbortController) currentCityAbortController.abort();
   currentCityAbortController = new AbortController();
@@ -1574,6 +1596,26 @@ async function switchCity(name, lng, lat, countryCode) {
   const provinceOutlines = [];
 
   if (isChina) {
+    const presetKey = PRESET_CITIES[name] || PRESET_CITIES[name.replace(/市$/, "")];
+    if (presetKey && (currentTransport === "car" || currentTransport === "moto")) {
+      try {
+        showLoading("加载预设数据...");
+        const presetRes = await fetch(`/data/${presetKey}.json`, { signal });
+        const preset = await presetRes.json();
+        if (preset?.features && preset?.driveData) {
+          allCountyFeatures = preset.features;
+          driveDataMap = currentTransport === "moto"
+            ? applyMotoFactorToDriveData(preset.driveData)
+            : preset.driveData;
+          renderMap();
+          hideLoading();
+          return;
+        }
+      } catch (e) {
+        // Fall through to the real-time API path.
+      }
+    }
+
     const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(name)}`, { signal });
     const geoData = await geoRes.json();
     if (geoData?.error) {
@@ -1618,6 +1660,11 @@ async function switchCity(name, lng, lat, countryCode) {
         : t('loadingDriveTime', { done: '0', total: '1' })
     );
     const transportData = await fetchTransportTimes(currentOrigin, allCountyFeatures);
+    if (transportData?.__meta?.fallback) {
+      hideLoading();
+      renderMap(true);
+      return;
+    }
     for (const feature of allCountyFeatures) {
       const code = String(feature?.properties?.adcode || "");
       const center = feature?.properties?.centroid || feature?.properties?.center;
@@ -1637,9 +1684,13 @@ async function switchCity(name, lng, lat, countryCode) {
       } else {
         const rt = transportData[centerKey];
         if (rt) {
+          const baseHour = Math.round((rt.duration / 60) * 10) / 10;
+          const correctedHour = currentTransport === "moto"
+            ? Math.round(baseHour * MOTO_SPEED_FACTOR * 10) / 10
+            : baseHour;
           driveDataMap[code] = {
             ...driveDataMap[code],
-            time: Math.round((rt.duration / 60) * 10) / 10,
+            time: correctedHour,
             dist: rt.distance,
             estimated: false
           };
@@ -1788,7 +1839,7 @@ async function switchCity(name, lng, lat, countryCode) {
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(cacheKey)); } catch(e) {}
 
-  if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
+  if (!forceReload && cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     // 有缓存：直接用缓存的 OSRM 数据
     for (const [code, data] of Object.entries(cached)) {
       if (driveDataMap[code]) {
