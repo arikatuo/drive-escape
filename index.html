@@ -1917,12 +1917,13 @@ async function welcomeSelectCity(name) {
   dismissWelcome();
   // 立即同步四处：标题、图例、URL、搜索框
   showLoading(t('loading'));
-  document.getElementById("title-sub").textContent = t('subtitle', { city: name });
+  currentCityName = name;
+  updateTitleSub();
   document.getElementById("legend-origin").textContent = t('originCity', { city: name });
   document.title = t('pageTitle', { city: name });
   updateURL(name);
   document.getElementById('city-search').value = name;
-  // 通过 Nominatim 搜索
+  // 通过后端搜索定位
   try {
     const res = await fetch(`/api/search?keywords=${encodeURIComponent(name)}`);
     const data = await res.json();
@@ -1935,7 +1936,23 @@ async function welcomeSelectCity(name) {
       return;
     }
   } catch(e) {}
-  await switchCity(name, 0, 0, '');
+
+  // 搜索无结果时，退化到区划中心点
+  try {
+    const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(name)}`);
+    const geoData = await geoRes.json();
+    const center = String(geoData?.city?.center || "").split(",");
+    if (center.length === 2) {
+      const lng = parseFloat(center[0]);
+      const lat = parseFloat(center[1]);
+      if (Number.isFinite(lng) && Number.isFinite(lat)) {
+        await switchCity(name, lng, lat, 'cn');
+        return;
+      }
+    }
+  } catch (e) {}
+
+  hideLoading();
 }
 
 (function initWelcomeSearch() {
