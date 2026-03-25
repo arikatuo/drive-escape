@@ -1,6 +1,6 @@
-# 🚗 Drive Escape - Weekend Self-Driving Map
+# 🚗 Drive Escape - Mainland China AMap Fork
 
-Pick a city, see how far you can drive in 5 hours.
+This fork is migrating the original project to an AMap based Mainland China workflow.
 
 **Live Demo** → [drive-escape.pomodiary.com](https://drive-escape.pomodiary.com)
 
@@ -9,32 +9,63 @@ Pick a city, see how far you can drive in 5 hours.
 
 ## Features
 
-- 🔍 Search any city, instantly generate a driving time heatmap
-- 🗺️ District-level detail with 10-tier color scale (green → red)
-- 🏷️ Labels with district name, drive time, and distance
-- ⏱️ Real driving time via OSRM + local cache for instant reload
-- 🌏 International support (Overpass API)
-- 📱 Mobile friendly
+- 🔍 Mainland city search via AMap
+- 🗺️ District boundaries via AMap district API
+- 🚗 Car mode via AMap distance matrix
+- 🏍 Moto mode reusing car data
+- 🚲 Bike mode via AMap bicycling API
+- 🚄 HSR mode scaffold via offline matrix + AMap transfers
+- ⏱️ Adjustable 1-12 hour range
+- ☁️ Cloudflare KV ready
 
 ## Tech Stack
 
 | Component | Solution |
 |-----------|----------|
 | Map | Leaflet + OpenStreetMap |
-| China Boundaries | DataV GeoJSON API |
-| International | Overpass API |
-| Driving Time | OSRM Table API |
-| City Search | Nominatim API |
+| China Boundaries | AMap District API |
+| Driving Time | AMap Distance / Bicycling API |
+| City Search | AMap Place Search API |
+| Cache | Cloudflare KV |
+| HSR | Offline JSON matrix + AMap transfer routing |
 | Hosting | Cloudflare Pages + Functions |
 
-No paid APIs. Fully open source.
+## Configuration
+
+Required before deployment:
+
+1. Create KV namespaces.
+
+```bash
+wrangler kv:namespace create "DRIVE_CACHE"
+wrangler kv:namespace create "DRIVE_CACHE" --preview
+```
+
+2. Update [wrangler.toml](/F:/driveescape/repo/wrangler.toml) with the returned IDs.
+
+3. Set the AMap key.
+
+```bash
+wrangler secret put AMAP_KEY
+```
+
+4. Fill the placeholder data files:
+
+- [hsr_stations.json](/F:/driveescape/repo/data/hsr_stations.json)
+- [hsr_matrix.json](/F:/driveescape/repo/data/hsr_matrix.json)
 
 ## Run Locally
 
 ```bash
-open index.html
-# or
+git clone https://github.com/arikatuo/drive-escape.git
+cd drive-escape
 python3 -m http.server 8080
+```
+
+Static hosting alone will not provide `/api/*` functions. For real local testing, run:
+
+```bash
+wrangler pages dev .
 ```
 
 ## Deploy
