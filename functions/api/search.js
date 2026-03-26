@@ -28,6 +28,10 @@ function parseCenter(center) {
   return { lon, lat };
 }
 
+function normalizeLabel(value) {
+  return Array.isArray(value) ? value.filter(Boolean).join("") : (value || "");
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === "OPTIONS") return jsonResp({});
@@ -46,13 +50,22 @@ export async function onRequest(context) {
     .map(d => {
       const center = parseCenter(d.center);
       if (!center) return null;
+      const cityLabel = normalizeLabel(d.cityname);
+      const provinceName = normalizeLabel(d.pname);
+      const provinceCity = d.level === "district"
+        ? `${provinceName}${cityLabel}`.trim()
+        : d.level === "city"
+        ? provinceName
+        : "";
       return {
         display_name: d.name,
+        province_city: provinceCity,
         address: d.level === "province" ? "省级行政区" : d.level === "city" ? "城市" : "区县",
         lon: center.lon,
         lat: center.lat,
         adcode: d.adcode || "",
-        country_code: "cn"
+        country_code: "cn",
+        level: d.level
       };
     })
     .filter(Boolean);
@@ -73,11 +86,13 @@ export async function onRequest(context) {
       if (!center) return null;
       return {
         display_name: p.cityname || p.name,
+        province_city: [p.pname, p.cityname].filter(Boolean).join(""),
         address: [p.pname, p.cityname, p.adname].filter(Boolean).join(" "),
         lon: center.lon,
         lat: center.lat,
         adcode: p.adcode || "",
-        country_code: "cn"
+        country_code: "cn",
+        level: p.cityname ? "city" : "district"
       };
     })
     .filter(Boolean);

@@ -65,16 +65,13 @@
     .top-controls {
       position: fixed;
       top: 12px;
-      right: 16px;
+      right: 12px;
       z-index: 1001;
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
     }
 
     /* 搜索框 */
     .search-box {
-      width: 220px;
+      width: 100%;
     }
     .search-box input {
       width: 100%;
@@ -93,7 +90,6 @@
     .search-box input:focus { box-shadow: 0 4px 20px rgba(0,0,0,0.18); }
 
     #search-results {
-      margin-top: 4px;
       background: rgba(255,255,255,0.95);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
@@ -196,20 +192,20 @@
     .control-card {
       position: fixed;
       top: 12px;
-      left: 16px;
+      left: 12px;
       z-index: 1001;
-      width: 216px;
-      padding: 12px 14px;
-      background: rgba(255,255,255,0.93);
+      width: 220px;
+      padding: 14px;
+      background: rgba(255,255,255,0.95);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      border-radius: 12px;
+      border-radius: 14px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     }
     .ctrl-label {
       font-size: 11px;
       color: #888;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
       letter-spacing: .04em;
     }
     .transport-row {
@@ -330,6 +326,7 @@
       padding: 12px 14px 8px;
       border-bottom: 1px solid rgba(0,0,0,0.07);
       flex-shrink: 0;
+      background: rgba(255,255,255,0.97);
     }
     #result-summary {
       display: block;
@@ -439,48 +436,29 @@
 
     @media (max-width: 640px) {
       .title-overlay {
-        top: 8px;
+        top: 176px;
         padding: 6px 14px;
         width: auto;
-        max-width: calc(100vw - 120px);
+        max-width: calc(100vw - 16px);
         white-space: nowrap;
       }
       .title-overlay .en { font-size: 7px; }
       .title-overlay h1 { font-size: 15px; }
       .title-overlay .sub { font-size: 10px; }
 
-      .top-controls {
-        top: auto;
-        right: auto;
-        left: auto;
-        display: contents;
-      }
-      .top-controls .search-box {
-        position: fixed;
-        top: 68px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 180px;
-        z-index: 1001;
-      }
-      .top-controls input[type="text"] {
-        width: 100%;
-        padding: 7px 12px;
-        font-size: 13px;
-      }
       .control-card {
-        left: 10px;
-        right: 10px;
-        top: 110px;
-        bottom: auto;
+        top: 8px;
+        left: 8px;
+        right: 8px;
         width: auto;
+        padding: 10px 12px;
       }
       .transport-row {
-        gap: 5px;
+        gap: 4px;
       }
       .t-btn {
         font-size: 11px;
-        padding: 5px 8px;
+        padding: 4px 8px;
       }
       #search-results { max-height: 200px; }
 
@@ -687,31 +665,29 @@
 </div>
 
 <div class="control-card" id="control-card">
+  <div class="ctrl-label">出发地</div>
+  <div class="search-box" style="position:relative;margin-bottom:12px">
+    <input type="text" id="city-search" placeholder="搜索城市或区县..." autocomplete="off" spellcheck="false"
+      style="width:100%;padding:7px 12px;border:none;border-radius:8px;background:rgba(240,240,240,0.8);font-size:13px;outline:none;font-family:system-ui,-apple-system,sans-serif;" />
+    <div id="search-results"
+      style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:rgba(255,255,255,0.98);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.12);overflow:hidden;display:none;z-index:1100;max-height:240px;overflow-y:auto"></div>
+  </div>
   <div class="ctrl-label">交通方式</div>
-  <div class="transport-row" id="transport-row">
+  <div class="transport-row" id="transport-row" style="margin-bottom:12px">
     <button class="t-btn active" data-type="car" onclick="selectTransport('car')">汽车</button>
     <button class="t-btn" data-type="hsr" onclick="selectTransport('hsr')">高铁</button>
     <button class="t-btn" data-type="moto" onclick="selectTransport('moto')">摩托</button>
     <button class="t-btn" data-type="bike" onclick="selectTransport('bike')">自行车</button>
   </div>
-  <div class="ctrl-label" style="margin-top:10px">最长时间</div>
-  <div class="time-row">
+  <div class="ctrl-label">最长时间</div>
+  <div class="time-row" style="margin-bottom:12px">
     <input type="range" id="time-slider" min="1" max="12" value="5" oninput="updateTimeLimit(this.value)" />
     <span id="time-val">5</span>
     <span class="time-unit">小时</span>
   </div>
-  <div style="margin-top:10px">
-    <button id="query-btn" onclick="onQueryClick()"
-      style="width:100%;padding:8px 0;border-radius:10px;border:none;background:#1a6e5c;color:#fff;font-size:13px;font-weight:700;cursor:pointer;opacity:0.4;pointer-events:none;transition:all .2s"
-      disabled>查询</button>
-  </div>
-</div>
-
-<div class="top-controls">
-  <div class="search-box">
-    <input type="text" id="city-search" placeholder="搜索出发城市..." />
-    <div id="search-results"></div>
-  </div>
+  <button id="query-btn" onclick="onQueryClick()"
+    style="width:100%;padding:8px 0;border-radius:10px;border:none;background:#1a6e5c;color:#fff;font-size:13px;font-weight:700;cursor:pointer;opacity:0.4;pointer-events:none;transition:all .2s"
+    disabled>查询</button>
 </div>
 
 <div class="loading-overlay" id="loading">
@@ -798,18 +774,21 @@ if (document.readyState === 'loading') {
 </script>
 <script>
 // ── 色阶 ──
-const colorBands = [
-  { min: 0.0, max: 0.5, color: "#1a6e5c", label: "0–0.5h" },
-  { min: 0.5, max: 1.0, color: "#2d9f83", label: "0.5–1h" },
-  { min: 1.0, max: 1.5, color: "#6bab5e", label: "1–1.5h" },
-  { min: 1.5, max: 2.0, color: "#a3c44d", label: "1.5–2h" },
-  { min: 2.0, max: 2.5, color: "#d4d444", label: "2–2.5h" },
-  { min: 2.5, max: 3.0, color: "#e8c83a", label: "2.5–3h" },
-  { min: 3.0, max: 3.5, color: "#e8a43a", label: "3–3.5h" },
-  { min: 3.5, max: 4.0, color: "#dd7733", label: "3.5–4h" },
-  { min: 4.0, max: 4.5, color: "#cc4422", label: "4–4.5h" },
-  { min: 4.5, max: 5.0, color: "#aa2211", label: "4.5–5h" }
-];
+function getDynamicColorBands(maxH) {
+  const COLORS = [
+    "#1a6e5c", "#2d9f83", "#6bab5e", "#a3c44d", "#d4d444",
+    "#e8c83a", "#e8a43a", "#dd7733", "#cc4422", "#aa2211"
+  ];
+  const step = maxH / COLORS.length;
+  return COLORS.map((color, i) => ({
+    min: Math.round(i * step * 10) / 10,
+    max: Math.round((i + 1) * step * 10) / 10,
+    color,
+    label: `${(i * step).toFixed(1)}-${((i + 1) * step).toFixed(1)}h`
+  }));
+}
+
+let colorBands = getDynamicColorBands(5);
 
 const MAX_STRAIGHT_KM = 400; // 直线距离上限，防止飞地
 
@@ -866,13 +845,19 @@ const PROVINCES = [
 ];
 
 // ── 图例 ──
-const bandList = document.getElementById("band-list");
-colorBands.forEach(b => {
-  const row = document.createElement("div");
-  row.className = "band";
-  row.innerHTML = `<span class="swatch" style="background:${b.color}"></span><span>${b.label}</span>`;
-  bandList.appendChild(row);
-});
+function updateLegend() {
+  const bandList = document.getElementById("band-list");
+  if (!bandList) return;
+  bandList.innerHTML = "";
+  colorBands.forEach(b => {
+    const row = document.createElement("div");
+    row.className = "band";
+    row.innerHTML = `<span class="swatch" style="background:${b.color}"></span><span>${b.label}</span>`;
+    bandList.appendChild(row);
+  });
+}
+
+updateLegend();
 
 // ── 地图初始化 ──
 const map = L.map("map", {
@@ -1046,7 +1031,7 @@ function enableQueryBtn() {
   const btn = document.getElementById("query-btn");
   if (!btn) return;
   btn.disabled = false;
-  btn.textContent = "查询";
+  setQueryBtnText("查询");
   btn.classList.remove("loading");
   btn.classList.add("ready");
 }
@@ -1055,8 +1040,13 @@ function disableQueryBtn() {
   const btn = document.getElementById("query-btn");
   if (!btn) return;
   btn.disabled = true;
-  btn.textContent = "查询";
+  setQueryBtnText("查询");
   btn.classList.remove("ready", "loading");
+}
+
+function setQueryBtnText(text) {
+  const btn = document.getElementById("query-btn");
+  if (btn) btn.textContent = text;
 }
 
 function queueCitySelection(name, lng, lat, cc, opts = {}) {
@@ -1086,14 +1076,14 @@ function onQueryClick() {
   if (!pendingCity) return;
   const btn = document.getElementById("query-btn");
   if (btn) {
-    btn.textContent = "查询中...";
+    setQueryBtnText("准备查询...");
     btn.classList.add("loading");
   }
   const { name, lng, lat, cc } = pendingCity;
   showLoading(t("loading"));
   switchCity(name, lng, lat, cc).finally(() => {
     if (btn) {
-      btn.textContent = "查询";
+      setQueryBtnText("查询");
       btn.classList.remove("loading");
     }
   });
@@ -1216,6 +1206,12 @@ function renderResultList() {
       : "暂无可达数据";
   }
 
+  if (items.length === 0) {
+    list.innerHTML = `<div style="padding:24px 14px;text-align:center;color:#bbb"><div style="font-size:24px;margin-bottom:8px">🗺️</div><div style="font-size:13px">${maxHours}小时内暂无可达区县<br><span style="font-size:11px">试试增加时间或切换交通方式</span></div></div>`;
+    if (summary) summary.textContent = "暂无可达区县";
+    return;
+  }
+
   list.innerHTML = "";
   items.forEach(item => {
     const card = document.createElement("div");
@@ -1232,10 +1228,15 @@ function renderResultList() {
       breakdownHtml = `<div class="result-item-breakdown">去${escapeHtml(oSt)} ${escapeHtml(toStation)}分 + 高铁 ${escapeHtml(trainTime)}分 + 离${escapeHtml(dSt)} ${escapeHtml(fromStation)}分</div>`;
     }
 
+    const cityname = item.feature?.properties?.cityname || "";
+    const cityHint = cityname && cityname !== item.name
+      ? `<span style="font-size:10px;color:#aaa;margin-left:4px">${escapeHtml(cityname)}</span>`
+      : "";
+
     card.innerHTML = `
       <span class="result-color-dot" style="background:${getBandColor(item.time)}"></span>
       <div class="result-item-body">
-        <div class="result-item-name">${escapeHtml(item.name)}</div>
+        <div class="result-item-name">${escapeHtml(item.name)}${cityHint}</div>
         <div class="result-item-meta">
           <span>${metaText}</span>
           <span>${currentTransport === "hsr" ? "高铁" : currentTransport === "bike" ? "骑行" : currentTransport === "moto" ? "摩托(估)" : "驾车"}</span>
@@ -1353,12 +1354,13 @@ async function searchCity(query) {
       return;
     }
     searchResults.innerHTML = data.map((item, i) => {
-      const name = item.display_name.split(",")[0];
-      const sub = item.address || '';
+      const name = item.display_name;
+      const levelLabel = item.level === "district" ? "区县" : item.level === "city" ? "城市" : "省份";
+      const locationHint = item.province_city || item.address || "";
       const cc = item.country_code || 'cn';
       return `<div class="result-item" data-idx="${i}" data-lng="${item.lon}" data-lat="${item.lat}" data-name="${name}" data-cc="${cc}">
-        <div>${name}</div>
-        <div class="result-sub">${sub}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>${escapeHtml(name)}</span><span style="font-size:10px;color:#aaa;background:rgba(0,0,0,0.05);padding:1px 6px;border-radius:8px">${levelLabel}</span></div>
+        ${locationHint ? `<div class="result-sub">${escapeHtml(locationHint)}</div>` : ""}
       </div>`;
     }).join("");
     searchResults.style.display = "block";
@@ -1384,14 +1386,8 @@ document.addEventListener("click", e => {
 
 function updateTitleSub() {
   if (!currentCityName) return;
-  const lang = window.LANG?.code || "zh-CN";
-  const transportNames = lang === "en"
-    ? { car: "Car", moto: "Moto", bike: "Bike", hsr: "HSR" }
-    : lang === "ja"
-    ? { car: "自動車", moto: "バイク", bike: "自転車", hsr: "新幹線" }
-    : { car: "汽车", moto: "摩托", bike: "自行车", hsr: "高铁" };
-  const hourUnit = lang === "en" ? "h" : lang === "ja" ? "時間" : "小时";
-  document.getElementById("title-sub").textContent = `${currentCityName} · ${transportNames[currentTransport]} · ${maxHours}${hourUnit}圈`;
+  const transportNames = { car: "汽车", moto: "摩托", bike: "自行车", hsr: "高铁" };
+  document.getElementById("title-sub").textContent = `${currentCityName} · ${transportNames[currentTransport]} · ${maxHours}小时圈`;
 }
 
 function selectTransport(type) {
@@ -1409,6 +1405,8 @@ function selectTransport(type) {
 function updateTimeLimit(val) {
   maxHours = parseFloat(val);
   document.getElementById("time-val").textContent = val;
+  colorBands = getDynamicColorBands(maxHours);
+  updateLegend();
   updateTitleSub();
   if (hasQueried && allCountyFeatures.length > 0) {
     renderMap(true);
@@ -1437,6 +1435,8 @@ function amapPolylineToGeoJSON(districts) {
         properties: {
           adcode: d.adcode,
           name: d.name,
+          cityname: Array.isArray(d.cityname) ? d.cityname.filter(Boolean).join("") : (d.cityname || ""),
+          level: d.level || "district",
           centroid,
           center: centroid
         },
@@ -1895,6 +1895,7 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
 
   // 4. loading
   showLoading(t('loading'));
+  setQueryBtnText("加载区划...");
 
   // 5. 判断是否在中国范围内
   const isChina = countryCode === 'cn' || (!countryCode && lat > 17 && lat < 55 && lng > 73 && lng < 136);
@@ -1911,6 +1912,7 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     if (presetKey && (currentTransport === "car" || currentTransport === "moto")) {
       try {
         showLoading("加载预设数据...");
+        setQueryBtnText("加载预设...");
         const presetRes = await fetch(`/data/${presetKey}.json`, { signal });
         const preset = await presetRes.json();
         if (preset?.features && preset?.driveData) {
@@ -1936,24 +1938,44 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(name)}`, { signal });
     const geoData = await geoRes.json();
     if (geoData?.error) {
+      setQueryBtnText("查询");
       hideLoading();
       return;
     }
-    allCountyFeatures = amapPolylineToGeoJSON(geoData.districts || []);
+    let districtGeoData = geoData;
+    let geoDistricts = geoData.districts || [];
+    const parentCityKeyword = Array.isArray(geoData.city?.cityname)
+      ? geoData.city.cityname.filter(Boolean).join("")
+      : (geoData.city?.cityname || "");
+    if ((geoData.city?.level === "district" || !geoDistricts.length) && (parentCityKeyword || name)) {
+      try {
+        const parentKeyword = parentCityKeyword || name;
+        const parentRes = await fetch(`/api/geo?keywords=${encodeURIComponent(parentKeyword)}`, { signal });
+        const parentData = await parentRes.json();
+        if (parentData?.districts?.length) {
+          districtGeoData = parentData;
+          geoDistricts = parentData.districts;
+        }
+      } catch (e) {
+        // Fall through to the original district list if the parent lookup fails.
+      }
+    }
+    allCountyFeatures = amapPolylineToGeoJSON(geoDistricts);
     if (!allCountyFeatures.length) {
+      setQueryBtnText("查询");
       hideLoading();
       return;
     }
 
-    const cityOutline = buildGeoFeatureFromAmapDistrict(geoData.city, {
-      name: geoData.city?.name || name,
-      adcode: geoData.city?.adcode || ""
+    const cityOutline = buildGeoFeatureFromAmapDistrict(districtGeoData.city, {
+      name: districtGeoData.city?.name || name,
+      adcode: districtGeoData.city?.adcode || ""
     });
     if (cityOutline) allCityOutlines = [cityOutline];
 
-    const provinceOutline = buildGeoFeatureFromAmapDistrict(geoData.province, {
-      name: geoData.province?.name || "",
-      adcode: geoData.province?.adcode || ""
+    const provinceOutline = buildGeoFeatureFromAmapDistrict(districtGeoData.province, {
+      name: districtGeoData.province?.name || "",
+      adcode: districtGeoData.province?.adcode || ""
     });
     if (provinceOutline) provinceOutlines.push(provinceOutline);
 
@@ -1969,6 +1991,13 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     renderMap();
     hideLoading();
 
+    setQueryBtnText(
+      currentTransport === "bike"
+        ? "计算骑行..."
+        : currentTransport === "hsr"
+        ? "计算高铁..."
+        : "计算驾车..."
+    );
     showLoading(
       currentTransport === "bike"
         ? "正在计算骑行时间..."
@@ -2019,6 +2048,7 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
 
     renderMap(true);
     finalizeQueryState();
+    setQueryBtnText("查询");
     hideLoading();
     return;
   } else {
@@ -2168,6 +2198,7 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     }
     renderMap();
     finalizeQueryState();
+    setQueryBtnText("查询");
     hideLoading();
     updateURL(name);
   } else {
@@ -2197,6 +2228,7 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
 
     // 串行逐批请求 OSRM，每批完成后刷新
     showLoading(t('loadingDriveTime', { done: '0', total: String(batches.length) }));
+    setQueryBtnText("计算驾车...");
     for (let bi = 0; bi < batches.length; bi++) {
       const batch = batches[bi];
       const coords = `${lng},${lat};` + batch.map(d => `${d.lng},${d.lat}`).join(";");
@@ -2237,6 +2269,7 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     }
     if (!signal.aborted) {
       finalizeQueryState();
+      setQueryBtnText("查询");
       hideLoading();
     }
 
