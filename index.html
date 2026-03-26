@@ -252,15 +252,15 @@
       opacity: 1 !important;
       pointer-events: auto !important;
       box-shadow: 0 2px 8px rgba(26,110,92,0.3);
-      animation: pulse-btn 1s ease 0.3s 2;
     }
     #query-btn.ready:hover { background: #15574a; }
     #query-btn.loading { opacity: 0.7; pointer-events: none; }
-    @keyframes pulse-btn {
-      0% { box-shadow: 0 0 0 0 rgba(26,110,92,0.5); }
+    @keyframes query-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(26,110,92,0.6); }
       70% { box-shadow: 0 0 0 8px rgba(26,110,92,0); }
       100% { box-shadow: 0 0 0 0 rgba(26,110,92,0); }
     }
+    #query-btn.pulse { animation: query-pulse 0.8s ease 2; }
 
     /* 县区标签 */
     .county-label {
@@ -383,6 +383,11 @@
       font-size: 13px;
       font-weight: 600;
       color: #1c1c1c;
+    }
+    .result-item-path {
+      font-size: 10px;
+      color: #9a9a9a;
+      margin-top: 2px;
     }
     .result-item-meta {
       font-size: 11px;
@@ -888,11 +893,13 @@ let labelLayer = L.layerGroup().addTo(map);
 let currentTransport = "car";
 let maxHours = 5;
 let currentCountryCode = "cn";
-let pendingCity = null;      // { name, lng, lat, cc }
-let hasQueried = false;
+let pendingQuery = false;
+let pendingQueryParams = null; // { name, lng, lat, cc }
 let currentSort = "time";
 let currentCountyLayer = null;
 let selectedCountyAdcode = null;
+let currentOriginLevel = "city";
+let currentOriginCityName = "";
 
 // 需要在 switchCity 中清除的图层
 let activeLayers = [];
@@ -938,7 +945,17 @@ function isFeatureReachable(feature, includeOrigin = true) {
 
 function findCountyFeature(adcode) {
   const code = String(adcode || "");
-  return allCountyFeatures.find(f => String(f?.properties?.adcode || "") === code) || null;
+  return [...allCountyFeatures, ...allGrayFeatures].find(f => String(f?.properties?.adcode || "") === code) || null;
+}
+
+function getReachableFeatures(includeOrigin = true) {
+  const seen = new Set();
+  return [...allCountyFeatures, ...allGrayFeatures].filter(feature => {
+    const code = String(feature?.properties?.adcode || "");
+    if (!code || seen.has(code)) return false;
+    seen.add(code);
+    return isFeatureReachable(feature, includeOrigin);
+  });
 }
 
 function escapeHtml(value) {
@@ -1041,7 +1058,7 @@ function disableQueryBtn() {
   if (!btn) return;
   btn.disabled = true;
   setQueryBtnText("查询");
-  btn.classList.remove("ready", "loading");
+  btn.classList.remove("ready", "loading", "pulse");
 }
 
 function setQueryBtnText(text) {
@@ -1049,37 +1066,69 @@ function setQueryBtnText(text) {
   if (btn) btn.textContent = text;
 }
 
+function getEffectiveOriginCityName() {
+  return currentOriginLevel === "district" && currentOriginCityName
+    ? currentOriginCityName
+    : currentCityName;
+}
+
+function isSameQueryTarget(target) {
+  if (!target || !currentCityName || !Array.isArray(currentOrigin) || currentOrigin.length !== 2) return false;
+  return target.name === currentCityName
+    && target.cc === currentCountryCode
+    && Math.abs(Number(target.lng) - Number(currentOrigin[0])) < 1e-6
+    && Math.abs(Number(target.lat) - Number(currentOrigin[1])) < 1e-6;
+}
+
+function highlightQueryBtn() {
+  const btn = document.getElementById("query-btn");
+  if (!btn || btn.disabled) return;
+  btn.classList.remove("pulse");
+  void btn.offsetWidth;
+  btn.classList.add("pulse");
+}
+
 function queueCitySelection(name, lng, lat, cc, opts = {}) {
   if (opts.dismissWelcome) dismissWelcome();
-  pendingCity = { name, lng, lat, cc: cc || "cn" };
-  hasQueried = false;
+  pendingQueryParams = { name, lng, lat, cc: cc || "cn" };
+  pendingQuery = true;
   selectedCountyAdcode = null;
-  currentCityName = name;
-  currentCountryCode = cc || "cn";
+  currentOriginLevel = opts.level || "city";
+  currentOriginCityName = opts.cityname || "";
   searchInput.value = name;
   searchResults.style.display = "none";
   const welcomeInput = document.getElementById("welcome-input");
   if (welcomeInput) welcomeInput.value = name;
   enableQueryBtn();
+  highlightQueryBtn();
   updateTitleSub();
   renderResultList();
 }
 
 function finalizeQueryState() {
-  hasQueried = true;
-  pendingCity = null;
+  pendingQuery = false;
+  pendingQueryParams = null;
   disableQueryBtn();
   renderResultList();
 }
 
 function onQueryClick() {
-  if (!pendingCity) return;
   const btn = document.getElementById("query-btn");
+  let target = null;
+  if (pendingQueryParams) {
+    target = pendingQueryParams;
+  } else if (pendingQuery && currentCityName) {
+    target = { name: currentCityName, lng: currentOrigin[0], lat: currentOrigin[1], cc: currentCountryCode };
+  } else if (currentCityName) {
+    target = { name: currentCityName, lng: currentOrigin[0], lat: currentOrigin[1], cc: currentCountryCode };
+  }
+  if (!target) return;
   if (btn) {
     setQueryBtnText("准备查询...");
     btn.classList.add("loading");
+    btn.classList.remove("pulse");
   }
-  const { name, lng, lat, cc } = pendingCity;
+  const { name, lng, lat, cc } = target;
   showLoading(t("loading"));
   switchCity(name, lng, lat, cc).finally(() => {
     if (btn) {
@@ -1161,22 +1210,32 @@ function renderResultList() {
   const summary = document.getElementById("result-summary");
   if (!list) return;
 
-  if (!hasQueried || !allCountyFeatures.length) {
+  const hasResultData = allCountyFeatures.length || allGrayFeatures.length;
+  const waitingForNewCity = pendingQueryParams && !isSameQueryTarget(pendingQueryParams);
+  if (!currentCityName || !hasResultData || waitingForNewCity) {
     list.innerHTML = "";
     if (summary) {
-      summary.textContent = pendingCity
-        ? `已选择 ${pendingCity.name}，点击查询`
+      summary.textContent = pendingQueryParams
+        ? `已选择 ${pendingQueryParams.name}，点击查询`
+        : pendingQuery && currentCityName
+        ? `参数已更新，点击查询`
         : "选择城市后查询";
     }
     return;
   }
 
-  const items = allCountyFeatures
-    .filter(feature => isFeatureReachable(feature, false))
+  const items = getReachableFeatures(false)
     .map(feature => {
       const code = String(feature?.properties?.adcode || "");
       const data = getDriveData(feature);
       if (!data) return null;
+      const provName = data.provName || feature?.properties?.provName || "";
+      const cityName = data.cityName || feature?.properties?.cityname || "";
+      const pathText = provName
+        ? (cityName && cityName !== provName
+          ? `${provName} · ${cityName}`
+          : provName)
+        : cityName;
       return {
         code,
         name: data.name || feature?.properties?.name || "",
@@ -1184,7 +1243,10 @@ function renderResultList() {
         dist: data.dist,
         estimated: !!data.estimated,
         breakdown: data.breakdown || null,
-        feature
+        feature,
+        provName,
+        cityName,
+        pathText
       };
     })
     .filter(Boolean);
@@ -1201,8 +1263,9 @@ function renderResultList() {
 
   if (summary) {
     const transportLabel = { car: "汽车", moto: "摩托", bike: "自行车", hsr: "高铁" };
+    const provCount = new Set(items.map(item => item.provName).filter(Boolean)).size;
     summary.textContent = items.length
-      ? `${maxHours}小时内 ${transportLabel[currentTransport] || ""} 可达 ${items.length} 个区县`
+      ? `${maxHours}小时内${transportLabel[currentTransport] || ""}可达${provCount}省${items.length}个区县`
       : "暂无可达数据";
   }
 
@@ -1228,15 +1291,15 @@ function renderResultList() {
       breakdownHtml = `<div class="result-item-breakdown">去${escapeHtml(oSt)} ${escapeHtml(toStation)}分 + 高铁 ${escapeHtml(trainTime)}分 + 离${escapeHtml(dSt)} ${escapeHtml(fromStation)}分</div>`;
     }
 
-    const cityname = item.feature?.properties?.cityname || "";
-    const cityHint = cityname && cityname !== item.name
-      ? `<span style="font-size:10px;color:#aaa;margin-left:4px">${escapeHtml(cityname)}</span>`
+    const pathHint = item.pathText
+      ? `<div class="result-item-path">${escapeHtml(item.pathText)}</div>`
       : "";
 
     card.innerHTML = `
       <span class="result-color-dot" style="background:${getBandColor(item.time)}"></span>
       <div class="result-item-body">
-        <div class="result-item-name">${escapeHtml(item.name)}${cityHint}</div>
+        <div class="result-item-name">${escapeHtml(item.name)}</div>
+        ${pathHint}
         <div class="result-item-meta">
           <span>${metaText}</span>
           <span>${currentTransport === "hsr" ? "高铁" : currentTransport === "bike" ? "骑行" : currentTransport === "moto" ? "摩托(估)" : "驾车"}</span>
@@ -1263,7 +1326,7 @@ function updateLabels() {
 
   const allFeatures = [
     ...allCountyFeatures.filter(f => isFeatureReachable(f, true)).map(f => ({ f, core: true })),
-    ...allGrayFeatures.map(f => ({ f, core: false }))
+    ...allGrayFeatures.filter(f => isFeatureReachable(f, false)).map(f => ({ f, core: false }))
   ];
 
   allFeatures.sort((a, b) => {
@@ -1334,10 +1397,10 @@ let searchTimer = null;
 searchInput.addEventListener("input", () => {
   clearTimeout(searchTimer);
   const q = searchInput.value.trim();
-  if (!pendingCity || q !== pendingCity.name) {
-    pendingCity = null;
+  if (!pendingQueryParams || q !== pendingQueryParams.name) {
+    pendingQueryParams = null;
     disableQueryBtn();
-    if (!hasQueried) renderResultList();
+    renderResultList();
   }
   if (!q) { searchResults.style.display = "none"; return; }
   searchTimer = setTimeout(() => searchCity(q), 400);
@@ -1356,9 +1419,9 @@ async function searchCity(query) {
     searchResults.innerHTML = data.map((item, i) => {
       const name = item.display_name;
       const levelLabel = item.level === "district" ? "区县" : item.level === "city" ? "城市" : "省份";
-      const locationHint = item.province_city || item.address || "";
+      const locationHint = item.sub_label || item.address || "";
       const cc = item.country_code || 'cn';
-      return `<div class="result-item" data-idx="${i}" data-lng="${item.lon}" data-lat="${item.lat}" data-name="${name}" data-cc="${cc}">
+      return `<div class="result-item" data-idx="${i}" data-lng="${item.lon}" data-lat="${item.lat}" data-name="${name}" data-cc="${cc}" data-level="${item.level || "city"}" data-pname="${item.pname || ""}" data-cityname="${item.cityname || ""}">
         <div style="display:flex;justify-content:space-between;align-items:center"><span>${escapeHtml(name)}</span><span style="font-size:10px;color:#aaa;background:rgba(0,0,0,0.05);padding:1px 6px;border-radius:8px">${levelLabel}</span></div>
         ${locationHint ? `<div class="result-sub">${escapeHtml(locationHint)}</div>` : ""}
       </div>`;
@@ -1370,7 +1433,11 @@ async function searchCity(query) {
         const lat = parseFloat(el.dataset.lat);
         const name = el.dataset.name;
         const cc = el.dataset.cc;
-        queueCitySelection(name, lng, lat, cc);
+        const level = el.dataset.level || "city";
+        const cityname = el.dataset.cityname || "";
+        currentOriginLevel = level;
+        currentOriginCityName = cityname;
+        queueCitySelection(name, lng, lat, cc, { level, cityname });
       });
     });
   } catch(e) {
@@ -1396,9 +1463,10 @@ function selectTransport(type) {
     b.classList.toggle("active", b.dataset.type === type);
   });
   updateTitleSub();
-  if (hasQueried && currentCityName && !pendingCity) {
-    showLoading(t("loading"));
-    switchCity(currentCityName, currentOrigin[0], currentOrigin[1], currentCountryCode, true);
+  if (currentCityName) {
+    pendingQuery = true;
+    enableQueryBtn();
+    highlightQueryBtn();
   }
 }
 
@@ -1408,9 +1476,10 @@ function updateTimeLimit(val) {
   colorBands = getDynamicColorBands(maxHours);
   updateLegend();
   updateTitleSub();
-  if (hasQueried && allCountyFeatures.length > 0) {
-    renderMap(true);
-    renderResultList();
+  if (currentCityName) {
+    pendingQuery = true;
+    enableQueryBtn();
+    highlightQueryBtn();
   }
 }
 
@@ -1525,7 +1594,7 @@ async function fetchTransportTimes(origin, districts) {
     body: JSON.stringify({
       originLng: origin[0],
       originLat: origin[1],
-      originCity: currentCityName,
+      originCity: getEffectiveOriginCityName(),
       districts: districts.map(d => {
         const c = d?.properties?.centroid || d?.properties?.center;
         return { adcode: d?.properties?.adcode, lng: c?.[0], lat: c?.[1], name: d?.properties?.name || "" };
@@ -1607,6 +1676,69 @@ async function loadProvinceCounties(provAdcode) {
   } catch(e) {
     return { provAdcode, provOutline: null, cityResults: [] };
   }
+}
+
+async function loadNearbyProvinces(originLng, originLat, signal, provinceOutlines) {
+  if (currentTransport !== "car" && currentTransport !== "moto") return;
+  const originCityCode = originAdcode ? Number(String(originAdcode).slice(0, 4) + "00") : 0;
+  const originProvCode = originAdcode ? Number(String(originAdcode).slice(0, 2) + "0000") : 0;
+  const nearbyProvinces = PROVINCES.filter(prov => {
+    if (prov.code === originProvCode) return false;
+    return haversine(originLng, originLat, prov.center[0], prov.center[1]) <= 600;
+  });
+  if (!nearbyProvinces.length) return;
+
+  const provinceTasks = nearbyProvinces.map(prov => async () => {
+    if (signal.aborted) return null;
+    return loadProvinceCounties(prov.code);
+  });
+  const provinceResults = await parallelLimit(provinceTasks, 3);
+  if (signal.aborted) return;
+
+  const seenFeatureCodes = new Set(allCountyFeatures.map(f => String(f?.properties?.adcode || "")));
+  const seenGrayCodes = new Set(allGrayFeatures.map(f => String(f?.properties?.adcode || "")));
+
+  provinceResults.forEach((provinceData, idx) => {
+    if (!provinceData || signal.aborted) return;
+    const provinceMeta = nearbyProvinces[idx];
+    const provName = provinceMeta?.name || provinceData.provOutline?.properties?.name || "";
+    if (provinceData.provOutline) {
+      provinceOutlines.push(provinceData.provOutline);
+    }
+
+    provinceData.cityResults.forEach(cityResult => {
+      const cityOutline = cityResult?.outline || null;
+      const cityName = cityOutline?.properties?.name || provName;
+      if (cityOutline && Number(cityOutline?.properties?.adcode || 0) !== originCityCode) {
+        allGrayCityOutlines.push(cityOutline);
+      }
+      (cityResult?.counties || []).forEach(feature => {
+        if (signal.aborted) return;
+        const code = String(feature?.properties?.adcode || "");
+        if (!code || seenFeatureCodes.has(code) || seenGrayCodes.has(code)) return;
+        const center = getFeatureCenter(feature);
+        if (!center) return;
+        const distKm = haversine(originLng, originLat, center[0], center[1]);
+        if (distKm > MAX_STRAIGHT_KM) return;
+        feature.properties = {
+          ...feature.properties,
+          provName,
+          cityname: cityName
+        };
+        const est = estimateDriveTime(center[0], center[1]);
+        driveDataMap[code] = {
+          name: feature?.properties?.name || "",
+          time: est.time,
+          dist: est.dist,
+          estimated: true,
+          provName,
+          cityName
+        };
+        allGrayFeatures.push(feature);
+        seenGrayCodes.add(code);
+      });
+    });
+  });
 }
 
 // 加载省级轮廓（市级，不展开区县）
@@ -1698,9 +1830,12 @@ function renderMap(skipFitBounds = false) {
     driveDataMap[originAdcode].dist = 0;
   }
 
+  const coloredCodes = new Set(getReachableFeatures(true).map(f => String(f?.properties?.adcode || "")));
+
   // 灰色背景
-  if (allGrayFeatures.length) {
-    const grayLayer = L.geoJSON({ type: "FeatureCollection", features: allGrayFeatures }, {
+  const grayBackgroundFeatures = allGrayFeatures.filter(f => !coloredCodes.has(String(f?.properties?.adcode || "")));
+  if (grayBackgroundFeatures.length) {
+    const grayLayer = L.geoJSON({ type: "FeatureCollection", features: grayBackgroundFeatures }, {
       style: {
         color: "#ccc",
         weight: 0.5,
@@ -1726,7 +1861,7 @@ function renderMap(skipFitBounds = false) {
   }
 
   // 过滤掉超过 MAX_DRIVE_HOURS 或直线距离过远的区县（避免飞地）
-  const visibleFeatures = allCountyFeatures.filter(f => isFeatureReachable(f, true));
+  const visibleFeatures = getReachableFeatures(true);
 
   // 县区填充层
   const countyLayer = L.geoJSON({ type: "FeatureCollection", features: visibleFeatures }, {
@@ -1924,8 +2059,21 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
           driveDataMap = currentTransport === "moto"
             ? applyMotoFactorToDriveData(preset.driveData)
             : preset.driveData;
+          Object.entries(driveDataMap).forEach(([code, data]) => {
+            const feature = allCountyFeatures.find(f => String(f?.properties?.adcode || "") === code);
+            driveDataMap[code] = {
+              ...data,
+              provName: data.provName || feature?.properties?.provName || name,
+              cityName: data.cityName || feature?.properties?.cityname || name
+            };
+          });
           originAdcode = String(preset.features[0]?.properties?.adcode || "").slice(0, 4) + "0000";
           renderMap();
+          await loadNearbyProvinces(currentOrigin[0], currentOrigin[1], signal, provinceOutlines);
+          if (!signal.aborted) {
+            renderMap(true);
+            renderResultList();
+          }
           finalizeQueryState();
           hideLoading();
           return;
@@ -1935,7 +2083,11 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
       }
     }
 
-    const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(name)}`, { signal });
+    let geoKeywords = name;
+    if (currentOriginLevel === "district" && currentOriginCityName) {
+      geoKeywords = currentOriginCityName;
+    }
+    const geoRes = await fetch(`/api/geo?keywords=${encodeURIComponent(geoKeywords)}`, { signal });
     const geoData = await geoRes.json();
     if (geoData?.error) {
       setQueryBtnText("查询");
@@ -1944,9 +2096,9 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     }
     let districtGeoData = geoData;
     let geoDistricts = geoData.districts || [];
-    const parentCityKeyword = Array.isArray(geoData.city?.cityname)
+    const parentCityKeyword = currentOriginCityName || (Array.isArray(geoData.city?.cityname)
       ? geoData.city.cityname.filter(Boolean).join("")
-      : (geoData.city?.cityname || "");
+      : (geoData.city?.cityname || ""));
     if ((geoData.city?.level === "district" || !geoDistricts.length) && (parentCityKeyword || name)) {
       try {
         const parentKeyword = parentCityKeyword || name;
@@ -1985,7 +2137,14 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
       const center = feature?.properties?.centroid || feature?.properties?.center;
       if (!center) continue;
       const est = estimateDriveTime(center[0], center[1]);
-      driveDataMap[code] = { name: cname, time: est.time, dist: est.dist, estimated: true };
+      driveDataMap[code] = {
+        name: cname,
+        time: est.time,
+        dist: est.dist,
+        estimated: true,
+        provName: districtGeoData.province?.name || "",
+        cityName: districtGeoData.city?.name || name
+      };
     }
 
     renderMap();
@@ -2008,6 +2167,11 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     const transportData = await fetchTransportTimes(currentOrigin, allCountyFeatures);
     if (transportData?.fallback) {
       showToast("高德 API 今日配额已用完，当前使用估算数据");
+      await loadNearbyProvinces(currentOrigin[0], currentOrigin[1], signal, provinceOutlines);
+      if (!signal.aborted) {
+        renderMap(true);
+        renderResultList();
+      }
       renderMap(true);
       finalizeQueryState();
       hideLoading();
@@ -2047,6 +2211,11 @@ async function switchCity(name, lng, lat, countryCode, forceReload = false) {
     }
 
     renderMap(true);
+    await loadNearbyProvinces(currentOrigin[0], currentOrigin[1], signal, provinceOutlines);
+    if (!signal.aborted) {
+      renderMap(true);
+      renderResultList();
+    }
     finalizeQueryState();
     setQueryBtnText("查询");
     hideLoading();
@@ -2299,8 +2468,10 @@ function showWelcome() {
   const ws = document.getElementById('welcome-screen');
   if (!ws) return;
   welcomeVisible = true;
-  pendingCity = null;
-  hasQueried = false;
+  pendingQuery = false;
+  pendingQueryParams = null;
+  currentOriginLevel = "city";
+  currentOriginCityName = "";
   disableQueryBtn();
   renderResultList();
   ws.classList.remove('hidden');
@@ -2345,7 +2516,10 @@ async function welcomeSelectCity(name) {
       const item = data[0];
       const resolved = item.display_name.split(",")[0];
       const cc = item.country_code || 'cn';
-      queueCitySelection(resolved, parseFloat(item.lon), parseFloat(item.lat), cc);
+      queueCitySelection(resolved, parseFloat(item.lon), parseFloat(item.lat), cc, {
+        level: item.level || "city",
+        cityname: item.cityname || ""
+      });
       hideLoading();
       return;
     }
@@ -2360,7 +2534,7 @@ async function welcomeSelectCity(name) {
       const lng = parseFloat(center[0]);
       const lat = parseFloat(center[1]);
       if (Number.isFinite(lng) && Number.isFinite(lat)) {
-        queueCitySelection(name, lng, lat, 'cn');
+        queueCitySelection(name, lng, lat, 'cn', { level: "city", cityname: "" });
         hideLoading();
         return;
       }
@@ -2397,7 +2571,11 @@ async function welcomeSelectCity(name) {
             const name = item.display_name.split(",")[0];
             const cc = item.country_code || 'cn';
             input.value = name;
-            queueCitySelection(name, parseFloat(item.lon), parseFloat(item.lat), cc, { dismissWelcome: true });
+            queueCitySelection(name, parseFloat(item.lon), parseFloat(item.lat), cc, {
+              dismissWelcome: true,
+              level: item.level || "city",
+              cityname: item.cityname || ""
+            });
           };
           results.appendChild(el);
         });
@@ -2431,6 +2609,8 @@ async function welcomeSelectCity(name) {
         const item = data[0];
         const name = item.display_name.split(",")[0];
         const cc = item.country_code || 'cn';
+        currentOriginLevel = item.level || "city";
+        currentOriginCityName = item.cityname || "";
         searchInput.value = name;
         await switchCity(name, parseFloat(item.lon), parseFloat(item.lat), cc);
         return;
