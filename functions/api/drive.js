@@ -25,7 +25,6 @@ export async function onRequest(context) {
 
   const BATCH = 100;
   const results = {};
-  let hasApiError = false;
 
   for (let i = 0; i < destinations.length; i += BATCH) {
     const batch = destinations.slice(i, i + BATCH);
@@ -34,7 +33,9 @@ export async function onRequest(context) {
     const res = await fetch(apiUrl);
     const data = await res.json();
     if (data.status !== "1") {
-      hasApiError = true;
+      if (data.infocode === "10003" || data.infocode === "10004") {
+        return jsonResp({ error: "quota_exceeded", fallback: true }, 200);
+      }
       continue;
     }
 
@@ -50,10 +51,6 @@ export async function onRequest(context) {
         distance: Math.round(distance / 1000)
       };
     });
-  }
-
-  if (hasApiError && Object.keys(results).length === 0) {
-    return jsonResp({ __meta: { fallback: true, error: "quota_or_api_error" } });
   }
 
   if (env.DRIVE_CACHE) {
